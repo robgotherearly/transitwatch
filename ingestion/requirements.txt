@@ -1,0 +1,25 @@
+# ingestion/requirements.txt
+
+# GTFS Realtime protobuf parsing
+gtfs-realtime-bindings==1.0.0
+protobuf==4.25.3
+
+# HTTP requests
+requests==2.31.0
+
+# PostgreSQL
+psycopg2-binary==2.9.9
+sqlalchemy==2.0.29
+
+# Data handling
+pandas==2.2.1
+
+# Env + config
+python-dotenv==1.0.1
+
+# Retry logic
+tenacity==8.2.3
+
+# Testing
+pytest==8.1.1
+pytest-mock==3.14.0
