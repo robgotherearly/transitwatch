@@ -1,0 +1,54 @@
+# .github/workflows/deploy.yml
+# Runs on merge to main.
+# Builds the Docker image, pushes to GitHub Container Registry,
+# then (Phase 6) SSHs into server and restarts the stack.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-push:
+    name: Build + push Docker image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write          # needed to push to ghcr.io
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ingestion image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ingestion
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/ingestion:latest
+            ghcr.io/${{ github.repository }}/ingestion:${{ github.sha }}
+
+  # Phase 6 will add a deploy step here:
+  # deploy:
+  #   needs: build-and-push
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: SSH and restart stack
+  #       uses: appleboy/ssh-action@v1
+  #       with:
+  #         host: ${{ secrets.DEPLOY_HOST }}
+  #         username: ${{ secrets.DEPLOY_USER }}
+  #         key: ${{ secrets.DEPLOY_KEY }}
+  #         script: |
+  #           cd ~/transitwatch
+  #           git pull origin main
+  #           docker-compose pull
+  #           docker-compose up -d --build
