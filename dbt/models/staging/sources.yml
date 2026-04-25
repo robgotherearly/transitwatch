@@ -1,0 +1,49 @@
+# dbt/models/staging/sources.yml
+# Declares raw tables as dbt sources.
+# This enables {{ source() }} references and source freshness checks.
+
+version: 2
+
+sources:
+  - name: transitwatch
+    description: "Raw GTFS Realtime data ingested from MTA feeds"
+    schema: public
+    freshness:
+      warn_after: {count: 30, period: minute}
+      error_after: {count: 60, period: minute}
+    loaded_at_field: ingested_at
+
+    tables:
+      - name: raw_trip_updates
+        description: "Raw trip updates from GTFS Realtime feed — one row per stop per trip"
+        columns:
+          - name: id
+            description: "Auto-incrementing primary key"
+          - name: fetch_id
+            description: "Foreign key to raw_feed_fetches"
+          - name: trip_id
+            description: "GTFS trip identifier"
+          - name: route_id
+            description: "GTFS route identifier (subway line)"
+          - name: arrival_delay
+            description: "Arrival delay in seconds — negative means early"
+          - name: fetched_at
+            description: "When this record was fetched from the API"
+
+      - name: raw_vehicle_positions
+        description: "Raw vehicle GPS positions from GTFS Realtime feed"
+        columns:
+          - name: vehicle_id
+            description: "Unique vehicle identifier"
+          - name: latitude
+            description: "GPS latitude"
+          - name: longitude
+            description: "GPS longitude"
+
+      - name: raw_feed_fetches
+        description: "Log of every API fetch attempt"
+        columns:
+          - name: fetch_id
+            description: "Primary key"
+          - name: status
+            description: "success or error"

@@ -1,0 +1,59 @@
+# dbt/models/marts/schema.yml
+# Documentation and tests for mart models.
+
+version: 2
+
+models:
+  - name: mart_route_delays
+    description: >
+      Per-route delay summary by service date and direction.
+      Primary table for route performance dashboards.
+    columns:
+      - name: route_id
+        tests: [not_null]
+      - name: service_date
+        tests: [not_null]
+      - name: total_updates
+        tests: [not_null]
+      - name: delay_rate_pct
+        description: "% of updates where arrival_delay > 60s"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+      - name: avg_delay_s
+        description: "Average delay in seconds — can be negative (early)"
+      - name: p95_delay_s
+        description: "95th percentile delay — represents worst-case experience"
+
+  - name: mart_hourly_performance
+    description: >
+      Hourly delay aggregation across all routes.
+      Used for time-of-day analysis and rush hour reporting.
+    columns:
+      - name: service_date
+        tests: [not_null]
+      - name: hour_of_day
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 23
+      - name: avg_delay_s
+        tests: [not_null]
+
+  - name: mart_stop_hotspots
+    description: >
+      Most delayed stops per route per day.
+      Used to identify chronic problem stations.
+    columns:
+      - name: stop_id
+        tests: [not_null]
+      - name: service_date
+        tests: [not_null]
+      - name: route_id
+        tests: [not_null]
+      - name: delay_rank
+        description: "1 = most delayed stop on this route this day"
+        tests: [not_null]
