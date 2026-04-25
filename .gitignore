@@ -5,3 +5,9 @@ dbt/logs/
 dbt/.user.yml
 dags/__pycache__/
 __pycache__/
+
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+dbt/.user.yml
+dags/__pycache__/
