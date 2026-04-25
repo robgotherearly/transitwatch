@@ -9,6 +9,8 @@ Real-time NYC subway delay analytics pipeline — an end-to-end data engineering
 
 ## Architecture
 
+![TransitWatch Architecture](./architecture.svg)
+
 ```
 MTA GTFS Realtime API (9 subway feeds)
           │
