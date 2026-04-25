@@ -1,0 +1,69 @@
+# dbt/models/staging/schema.yml
+# Column-level documentation and tests for staging models.
+# These tests run automatically in CI and after every DAG run.
+
+version: 2
+
+models:
+  - name: stg_trip_updates
+    description: >
+      Cleaned and deduplicated trip updates from the MTA GTFS Realtime feed.
+      One row per unique trip+stop combination within the lookback window.
+    columns:
+      - name: surrogate_key
+        description: "MD5 hash of trip_id + stop_id + start_date + start_time"
+        tests:
+          - unique
+          - not_null
+
+      - name: trip_id
+        description: "GTFS trip identifier"
+        tests:
+          - not_null
+
+      - name: route_id
+        description: "Subway line (A, C, E, 1, 2, 3 etc)"
+        tests:
+          - not_null
+
+      - name: stop_id
+        description: "Station stop identifier"
+        tests:
+          - not_null
+
+      - name: arrival_delay_s
+        description: "Cleaned arrival delay in seconds. Null if outside -3600 to 7200 range."
+
+      - name: service_date
+        description: "Parsed service date from GTFS start_date string"
+
+      - name: fetched_at
+        description: "Timestamp when data was fetched from the API"
+        tests:
+          - not_null
+
+  - name: stg_vehicle_positions
+    description: >
+      Cleaned vehicle GPS positions from the MTA GTFS Realtime feed.
+      One row per vehicle per fetch window.
+    columns:
+      - name: surrogate_key
+        description: "MD5 hash of vehicle_id + trip_id + fetched_at"
+        tests:
+          - unique
+          - not_null
+
+      - name: vehicle_id
+        description: "Unique vehicle identifier"
+        tests:
+          - not_null
+
+      - name: latitude
+        description: "GPS latitude — null if coordinates were invalid"
+
+      - name: longitude
+        description: "GPS longitude — null if coordinates were invalid"
+
+      - name: fetched_at
+        tests:
+          - not_null
