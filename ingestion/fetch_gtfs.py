@@ -3,7 +3,7 @@
 # Called by Airflow every 15 minutes via BashOperator.
 
 import logging
-import os
+
 import time
 from datetime import datetime, timezone
 

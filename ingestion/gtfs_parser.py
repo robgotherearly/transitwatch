@@ -3,7 +3,7 @@
 # Separated from fetching so it can be unit tested without network calls.
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
 from google.transit import gtfs_realtime_pb2

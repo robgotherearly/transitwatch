@@ -1,0 +1,131 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+
+  lint:
+    name: Lint (flake8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: ingestion/requirements.txt
+      - name: Install flake8
+        run: pip install flake8
+      - name: Lint ingestion
+        run: flake8 ingestion/ --max-line-length=100 --exclude=__pycache__,tests --ignore=E501,W503,E241,E221,E231
+      - name: Lint dags
+        run: flake8 dags/ --max-line-length=100 --exclude=__pycache__ --ignore=E501,W503,E241,E221,E231
+
+  unit-tests:
+    name: Unit tests (pytest)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: transitwatch
+          POSTGRES_PASSWORD: transitwatch_test
+          POSTGRES_DB: transitwatch_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_USER: transitwatch
+      POSTGRES_PASSWORD: transitwatch_test
+      POSTGRES_DB: transitwatch_test
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      MTA_API_KEY: fake-key-for-ci
+      GTFS_FEED_NAME: test_feed
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: ingestion/requirements.txt
+      - name: Install dependencies
+        run: pip install -r ingestion/requirements.txt
+      - name: Initialise test database
+        run: PGPASSWORD=transitwatch_test psql -h localhost -U transitwatch -d transitwatch_test -f init_db.sql
+      - name: Run unit tests
+        run: cd ingestion && pytest tests/ -v --tb=short --no-header
+
+  dbt-validate:
+    name: dbt parse + compile
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: transitwatch
+          POSTGRES_PASSWORD: transitwatch_test
+          POSTGRES_DB: transitwatch_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_USER: transitwatch
+      POSTGRES_PASSWORD: transitwatch_test
+      POSTGRES_DB: transitwatch_test
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dbt
+        run: pip install dbt-postgres==1.7.17
+      - name: Initialise test database
+        run: PGPASSWORD=transitwatch_test psql -h localhost -U transitwatch -d transitwatch_test -f init_db.sql
+      - name: dbt deps
+        working-directory: dbt
+        run: dbt deps --profiles-dir .
+      - name: dbt parse
+        working-directory: dbt
+        run: dbt parse --profiles-dir . --target dev
+      - name: dbt compile
+        working-directory: dbt
+        run: dbt compile --profiles-dir . --target dev
+
+  docker-build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build ingestion image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ingestion
+          push: false
+          tags: transitwatch-ingestion:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build Airflow image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.airflow
+          push: false
+          tags: transitwatch-airflow:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
