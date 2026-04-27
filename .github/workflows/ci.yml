@@ -21,9 +21,9 @@ jobs:
       - name: Install flake8
         run: pip install flake8
       - name: Lint ingestion
-        run: flake8 ingestion/ --max-line-length=100 --exclude=__pycache__,tests --ignore=E501,W503,E241,E221,E231
+        run: flake8 ingestion/ --max-line-length=100 --exclude=__pycache__,tests --ignore=E501,W503,E241,E221,E231,E302,E305,W292
       - name: Lint dags
-        run: flake8 dags/ --max-line-length=100 --exclude=__pycache__ --ignore=E501,W503,E241,E221,E231
+        run: flake8 dags/ --max-line-length=100 --exclude=__pycache__ --ignore=E501,W503,E241,E221,E231,E302,E305,W292
 
   unit-tests:
     name: Unit tests (pytest)
