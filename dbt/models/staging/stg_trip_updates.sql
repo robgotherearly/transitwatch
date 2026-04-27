@@ -13,7 +13,6 @@
 with source as (
     select *
     from {{ source('transitwatch', 'raw_trip_updates') }}
-    -- Only process recent data (controlled by lookback_hours var)
     where fetched_at >= now() - interval '{{ var("lookback_hours", 2) }} hours'
 ),
 
@@ -32,7 +31,6 @@ deduplicated as (
 
 cleaned as (
     select
-        -- Surrogate key: unique per trip+stop+fetch window
         md5(
             coalesce(trip_id, '') || '|' ||
             coalesce(stop_id, '') || '|' ||
@@ -44,7 +42,6 @@ cleaned as (
         route_id,
         direction_id,
 
-        -- Parse start_date string 'YYYYMMDD' → proper date
         case
             when start_date ~ '^\d{8}$'
             then to_date(start_date, 'YYYYMMDD')
@@ -54,17 +51,18 @@ cleaned as (
         stop_id,
         stop_sequence,
 
-        -- Clamp extreme delay values (>2hrs likely bad data)
+        -- Default null delays to 0 (on time) instead of dropping them
+        -- Only null out extreme values that are clearly bad data
         case
-            when arrival_delay between -3600 and 7200
-            then arrival_delay
-            else null
+            when arrival_delay is null then 0
+            when arrival_delay between -3600 and 7200 then arrival_delay
+            else 0
         end                                             as arrival_delay_s,
 
         case
-            when departure_delay between -3600 and 7200
-            then departure_delay
-            else null
+            when departure_delay is null then 0
+            when departure_delay between -3600 and 7200 then departure_delay
+            else 0
         end                                             as departure_delay_s,
 
         schedule_relationship,
