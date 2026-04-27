@@ -1,13 +1,32 @@
+﻿# Secrets — never commit
+.env
 
-dbt/target/
-dbt/dbt_packages/
-dbt/logs/
-dbt/.user.yml
-dags/__pycache__/
+# Python
 __pycache__/
+*.py[cod]
+.venv/
+venv/
 
+# dbt
 dbt/target/
 dbt/dbt_packages/
 dbt/logs/
 dbt/.user.yml
-dags/__pycache__/
+
+# Airflow
+logs/
+
+# Docker
+.docker/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Misc
+transitwatch/
+.env.backup
