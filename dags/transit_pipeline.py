@@ -87,15 +87,6 @@ with DAG(
         provide_context=True,
     )
 
-    def dbt_deps(**context):
-        run_dbt_command("dbt deps --profiles-dir .")
-        logger.info("dbt deps completed successfully")
-
-    task_dbt_deps = PythonOperator(
-        task_id="dbt_deps",
-        python_callable=dbt_deps,
-        provide_context=True,
-    )
 
     def dbt_run(**context):
         output = run_dbt_command("dbt run --profiles-dir . --target dev")
@@ -139,4 +130,4 @@ with DAG(
         trigger_rule="all_done",
     )
 
-    task_ingest >> task_dbt_deps >> task_dbt_run >> task_dbt_test >> task_summary
+    task_ingest >> task_dbt_run >> task_dbt_test >> task_summary
