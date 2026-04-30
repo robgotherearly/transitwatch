@@ -56,6 +56,45 @@ def run_dbt_command(command: str) -> str:
             f"stderr: {result.stderr}"
         )
 
+    return result.stdoutdef run_dbt_command(command: str) -> str:
+    """Run a dbt command and return output."""
+    import shutil
+    
+    dbt_path = shutil.which("dbt") or "/home/airflow/.local/bin/dbt"
+    dbt_dir = "/opt/airflow/dbt"
+    
+    # Replace 'dbt' with full path
+    full_command = command.replace("dbt ", f"{dbt_path} ", 1)
+    
+    env = os.environ.copy()
+    env.update({
+        "POSTGRES_HOST":     os.getenv("POSTGRES_HOST", "postgres"),
+        "POSTGRES_PORT":     os.getenv("POSTGRES_PORT", "5432"),
+        "POSTGRES_USER":     os.getenv("POSTGRES_USER", "transitwatch"),
+        "POSTGRES_PASSWORD": os.getenv("POSTGRES_PASSWORD", ""),
+        "POSTGRES_DB":       os.getenv("POSTGRES_DB", "transitwatch"),
+        "HOME":              "/home/airflow",
+    })
+
+    result = subprocess.run(
+        full_command.split(),
+        cwd=dbt_dir,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    logger.info("dbt stdout:\n%s", result.stdout)
+    if result.stderr:
+        logger.warning("dbt stderr:\n%s", result.stderr)
+
+    if result.returncode != 0:
+        raise Exception(
+            f"dbt command failed with code {result.returncode}\n"
+            f"stdout: {result.stdout}\n"
+            f"stderr: {result.stderr}"
+        )
+
     return result.stdout
 
 
