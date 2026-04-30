@@ -1,13 +1,14 @@
 # dags/transit_pipeline.py
 # Main TransitWatch DAG.
 # Schedule: every 15 minutes.
-# Flow: ingest_raw → run_dbt_models → run_dbt_tests → log_summary
+# Flow: ingest_raw -> run_dbt_models -> run_dbt_tests -> log_summary
 
 import logging
 import os
 import sys
 import subprocess
-from datetime import datetime, timedelta
+import shutil
+from datetime import timedelta
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
@@ -18,54 +19,22 @@ sys.path.insert(0, "/opt/airflow/ingestion")
 logger = logging.getLogger(__name__)
 
 default_args = {
-    "owner":            "transitwatch",
-    "depends_on_past":  False,
-    "retries":          2,
-    "retry_delay":      timedelta(minutes=2),
+    "owner":           "transitwatch",
+    "depends_on_past": False,
+    "retries":         2,
+    "retry_delay":     timedelta(minutes=2),
     "email_on_failure": False,
-    "email_on_retry":   False,
+    "email_on_retry":  False,
 }
 
-def run_dbt_command(command: str) -> str:
-    """Run a dbt command and return output."""
-    env = os.environ.copy()
-    env.update({
-        "POSTGRES_HOST":     os.getenv("POSTGRES_HOST", "postgres"),
-        "POSTGRES_PORT":     os.getenv("POSTGRES_PORT", "5432"),
-        "POSTGRES_USER":     os.getenv("POSTGRES_USER", "transitwatch"),
-        "POSTGRES_PASSWORD": os.getenv("POSTGRES_PASSWORD", ""),
-        "POSTGRES_DB":       os.getenv("POSTGRES_DB", "transitwatch"),
-    })
+DBT_DIR = "/opt/airflow/dbt"
 
-    result = subprocess.run(
-        command.split(),
-        cwd="/opt/airflow/dbt",
-        capture_output=True,
-        text=True,
-        env=env,
-    )
 
-    logger.info("dbt stdout:\n%s", result.stdout)
-    if result.stderr:
-        logger.warning("dbt stderr:\n%s", result.stderr)
-
-    if result.returncode != 0:
-        raise Exception(
-            f"dbt command failed with code {result.returncode}\n"
-            f"stdout: {result.stdout}\n"
-            f"stderr: {result.stderr}"
-        )
-
-    return result.stdoutdef run_dbt_command(command: str) -> str:
-    """Run a dbt command and return output."""
-    import shutil
-    
+def run_dbt_command(command):
+    """Run a dbt command using absolute path and return output."""
     dbt_path = shutil.which("dbt") or "/home/airflow/.local/bin/dbt"
-    dbt_dir = "/opt/airflow/dbt"
-    
-    # Replace 'dbt' with full path
-    full_command = command.replace("dbt ", f"{dbt_path} ", 1)
-    
+    full_command = command.replace("dbt ", dbt_path + " ", 1)
+
     env = os.environ.copy()
     env.update({
         "POSTGRES_HOST":     os.getenv("POSTGRES_HOST", "postgres"),
@@ -78,19 +47,20 @@ def run_dbt_command(command: str) -> str:
 
     result = subprocess.run(
         full_command.split(),
-        cwd=dbt_dir,
+        cwd=DBT_DIR,
         capture_output=True,
         text=True,
         env=env,
     )
 
     logger.info("dbt stdout:\n%s", result.stdout)
+
     if result.stderr:
         logger.warning("dbt stderr:\n%s", result.stderr)
 
     if result.returncode != 0:
         raise Exception(
-            f"dbt command failed with code {result.returncode}\n"
+            f"dbt failed with code {result.returncode}\n"
             f"stdout: {result.stdout}\n"
             f"stderr: {result.stderr}"
         )
@@ -100,7 +70,7 @@ def run_dbt_command(command: str) -> str:
 
 with DAG(
     dag_id="transit_pipeline",
-    description="Ingest GTFS Realtime → dbt transform → dbt test",
+    description="Ingest GTFS Realtime -> dbt transform -> dbt test",
     default_args=default_args,
     start_date=days_ago(1),
     schedule_interval="*/15 * * * *",
@@ -116,7 +86,10 @@ with DAG(
         failed = [r for r in results if r["status"] == "error"]
         if len(failed) == len(results):
             raise RuntimeError(f"All {len(failed)} feeds failed.")
-        total = sum(r.get("trip_updates", 0) + r.get("vehicle_positions", 0) for r in results)
+        total = sum(
+            r.get("trip_updates", 0) + r.get("vehicle_positions", 0)
+            for r in results
+        )
         logger.info(f"Ingested {total:,} records across {len(results)} feeds")
         return total
 
@@ -125,7 +98,6 @@ with DAG(
         python_callable=ingest_raw,
         provide_context=True,
     )
-
 
     def dbt_run(**context):
         output = run_dbt_command("dbt run --profiles-dir . --target dev")
@@ -153,7 +125,10 @@ with DAG(
     def log_summary(**context):
         ti = context["ti"]
         results = ti.xcom_pull(task_ids="ingest_raw", key="ingest_results") or []
-        total = sum(r.get("trip_updates", 0) + r.get("vehicle_positions", 0) for r in results)
+        total = sum(
+            r.get("trip_updates", 0) + r.get("vehicle_positions", 0)
+            for r in results
+        )
         success = sum(1 for r in results if r["status"] == "success")
         logger.info("=" * 50)
         logger.info("TransitWatch pipeline run complete")
