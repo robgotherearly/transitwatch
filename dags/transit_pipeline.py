@@ -1,13 +1,10 @@
 # dags/transit_pipeline.py
-# Main TransitWatch DAG.
-# Schedule: every 15 minutes.
-# Flow: ingest_raw -> run_dbt_models -> run_dbt_tests -> log_summary
+# Main TransitWatch DAG — fixed dbt execution via shell wrapper
 
 import logging
 import os
 import sys
 import subprocess
-import shutil
 from datetime import timedelta
 
 from airflow import DAG
@@ -21,51 +18,37 @@ logger = logging.getLogger(__name__)
 default_args = {
     "owner":           "transitwatch",
     "depends_on_past": False,
-    "retries":         2,
+    "retries":         1,
     "retry_delay":     timedelta(minutes=2),
     "email_on_failure": False,
     "email_on_retry":  False,
 }
 
-DBT_DIR = "/opt/airflow/dbt"
 
-
-def run_dbt_command(command):
-    """Run a dbt command using absolute path and return output."""
-    dbt_path = shutil.which("dbt") or "/home/airflow/.local/bin/dbt"
-    full_command = command.replace("dbt ", dbt_path + " ", 1)
+def run_dbt(args):
+    """Run dbt via shell wrapper script, capturing all output."""
+    cmd = ["/bin/bash", "/opt/airflow/dbt/run_dbt.sh"] + args
 
     env = os.environ.copy()
-    env.update({
-        "POSTGRES_HOST":     os.getenv("POSTGRES_HOST", "postgres"),
-        "POSTGRES_PORT":     os.getenv("POSTGRES_PORT", "5432"),
-        "POSTGRES_USER":     os.getenv("POSTGRES_USER", "transitwatch"),
-        "POSTGRES_PASSWORD": os.getenv("POSTGRES_PASSWORD", ""),
-        "POSTGRES_DB":       os.getenv("POSTGRES_DB", "transitwatch"),
-        "HOME":              "/home/airflow",
-    })
+    env["HOME"] = "/home/airflow"
+    env["PATH"] = "/home/airflow/.local/bin:/usr/local/bin:/usr/bin:/bin"
 
     result = subprocess.run(
-        full_command.split(),
-        cwd=DBT_DIR,
+        cmd,
         capture_output=True,
         text=True,
         env=env,
     )
 
-    logger.info("dbt stdout:\n%s", result.stdout)
-
-    if result.stderr:
-        logger.warning("dbt stderr:\n%s", result.stderr)
+    combined = result.stdout + "\n" + result.stderr
+    logger.info("dbt output:\n%s", combined)
 
     if result.returncode != 0:
         raise Exception(
-            f"dbt failed with code {result.returncode}\n"
-            f"stdout: {result.stdout}\n"
-            f"stderr: {result.stderr}"
+            f"dbt failed (exit {result.returncode}):\n{combined}"
         )
 
-    return result.stdout
+    return combined
 
 
 with DAG(
@@ -100,8 +83,8 @@ with DAG(
     )
 
     def dbt_run(**context):
-        output = run_dbt_command("dbt run --profiles-dir . --target dev")
-        logger.info("dbt run completed:\n%s", output)
+        output = run_dbt(["run", "--profiles-dir", ".", "--target", "dev"])
+        logger.info("dbt run done:\n%s", output)
 
     task_dbt_run = PythonOperator(
         task_id="run_dbt_models",
@@ -111,8 +94,8 @@ with DAG(
 
     def dbt_test(**context):
         try:
-            output = run_dbt_command("dbt test --profiles-dir . --target dev")
-            logger.info("dbt test completed:\n%s", output)
+            output = run_dbt(["test", "--profiles-dir", ".", "--target", "dev"])
+            logger.info("dbt test done:\n%s", output)
         except Exception as e:
             logger.warning("Some dbt tests failed: %s", str(e))
 
